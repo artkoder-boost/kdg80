@@ -34,6 +34,10 @@ const TEMPLATE_WHYGO_PREFIXES = [
   'это хорошая точка входа во весь фестиваль',
 ];
 
+const REMOVED_WHYGO_PREFIXES = [
+  'это способ увидеть за темой',
+];
+
 const GENERIC_QUESTION_MARKERS = [
   'почему тема',
   'какие люди, решения и обстоятельства',
@@ -84,6 +88,11 @@ function isTemplateWhyGo(value) {
   return TEMPLATE_WHYGO_PREFIXES.some((prefix) => lookup.startsWith(normalizeLookup(prefix)));
 }
 
+function isRemovedWhyGo(value) {
+  const lookup = normalizeLookup(value);
+  return REMOVED_WHYGO_PREFIXES.some((prefix) => lookup.startsWith(normalizeLookup(prefix)));
+}
+
 function listItemCount(value) {
   return (value ?? '')
     .split('\n')
@@ -109,8 +118,8 @@ function extractField(body, label) {
   return match?.[1]?.trim() ?? '';
 }
 
-function replaceField(body, labels, value, preferredLabel = labels[0]) {
-  const formatted = formatField(preferredLabel, value);
+function replaceField(body, labels, value, preferredLabel = labels[0], options = {}) {
+  const formatted = formatField(preferredLabel, value, options);
 
   for (const label of labels) {
     const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -123,9 +132,13 @@ function replaceField(body, labels, value, preferredLabel = labels[0]) {
   return `${body.trim()}\n\n${formatted}`;
 }
 
-function formatField(label, value) {
+function formatField(label, value, options = {}) {
   const trimmed = (value ?? '').trim();
+  const { allowEmpty = false } = options;
   if (!trimmed) {
+    if (allowEmpty) {
+      return `**${label}:**`;
+    }
     return `**${label}:** _Нет данных._`;
   }
 
@@ -230,10 +243,13 @@ function chooseWhyGo(v3Chunk, v4Chunk) {
   const v3Value = v3Chunk?.fields.whyGo ?? '';
   const v4Value = v4Chunk.fields.whyGo ?? '';
 
-  if (v3Value && !isPlaceholder(v3Value)) {
+  if (v3Value && !isPlaceholder(v3Value) && !isRemovedWhyGo(v3Value)) {
     return v3Value;
   }
-  return v4Value;
+  if (v4Value && !isPlaceholder(v4Value)) {
+    return v4Value;
+  }
+  return '';
 }
 
 function chooseFestivalWhy(v3Chunk, v4Chunk) {
@@ -295,7 +311,7 @@ function mergeChunk(v3Chunk, v4Chunk) {
 
   body = replaceField(body, ['Описание для сайта', 'Короткое описание для афиши — версия 1'], mergedSummary, 'Описание для сайта');
   body = replaceField(body, ['Основа для описания / полезная фактура из таблицы', 'Основа для описания'], mergedBaseDescription, 'Основа для описания / полезная фактура из таблицы');
-  body = replaceField(body, ['Цитата спикера: зачем идти именно на это событие', 'Цитата: зачем идти именно на это событие', 'Зачем идти на это событие', 'Зачем идти на эту лекцию', 'Зачем посетить выставку', 'Зачем идти на спектакль'], mergedWhyGo, 'Зачем идти на это событие');
+  body = replaceField(body, ['Цитата спикера: зачем идти именно на это событие', 'Цитата: зачем идти именно на это событие', 'Зачем идти на это событие', 'Зачем идти на эту лекцию', 'Зачем посетить выставку', 'Зачем идти на спектакль'], mergedWhyGo, 'Зачем идти на это событие', { allowEmpty: true });
   body = replaceField(body, ['Цитата: зачем идти на фестиваль', 'Зачем идти на фестиваль'], mergedFestivalWhy, 'Зачем идти на фестиваль');
   body = replaceField(body, ['3 вопроса, на которые отвечает событие', '3 вопроса, на которые отвечает лекция', '3 вопроса, на которые отвечает выставка', '3 вопроса, на которые отвечает спектакль'], mergedQuestions, '3 вопроса, на которые отвечает событие');
   body = replaceField(body, ['3 мифа и заблуждения, с которыми работает событие', '3 мифа и заблуждения, с которыми работает лекция', '3 заблуждения, с которыми работает лекция', '3 заблуждения, с которыми работает выставка', '3 заблуждения, с которыми работает спектакль'], mergedMyths, '3 мифа и заблуждения, с которыми работает событие');

@@ -11,7 +11,7 @@ type MediaManifest = {
 const media = mediaManifest as MediaManifest;
 const curatedSummaries = summaryOverrides as Record<string, string>;
 
-type FestivalEventKind = 'dated' | 'range' | 'special';
+export type FestivalEventKind = 'dated' | 'range' | 'special';
 
 export type RelatedFestivalEvent = {
   slug: string;
@@ -52,6 +52,7 @@ export type FestivalEvent = {
   title: string;
   format: string;
   formatLabel: string;
+  accessLabel?: string;
   dateLabel: string;
   monthLabel: string;
   monthAnchor: string;
@@ -62,6 +63,7 @@ export type FestivalEvent = {
   city: string;
   speakerLabel: string;
   affiliation: string;
+  heroRole: string;
   showingsLabel: string;
   summary: string;
   whyGo: string;
@@ -210,6 +212,12 @@ const EVENT_IMAGE_MAP: Array<{ title: string; speaker: string; manifestKeys: str
     manifestKeys: ['Первые на косе - Цедрик'],
   },
   {
+    title: 'Выставка «Первые на косе»',
+    speaker: '',
+    manifestKeys: ['Первые на косе - Выставка'],
+    alternateTitles: ['Выставка Первые на косе'],
+  },
+  {
     title: 'Советский Гусев — время созиданий',
     speaker: 'Ситникова',
     manifestKeys: ['Советский Гусев - Ситникова'],
@@ -281,6 +289,12 @@ const EVENT_IMAGE_MAP: Array<{ title: string; speaker: string; manifestKeys: str
     title: 'Мирная жизнь самой западной точки России (Балтийской косы)',
     speaker: 'Надымова',
     manifestKeys: ['Самая западная точка России Балтийская коса - Надымова'],
+  },
+  {
+    title: 'Выставка историй мирной жизни самой западной точки России',
+    speaker: '',
+    manifestKeys: ['Мирная жизнь на Балтийской косе - Выставка'],
+    alternateTitles: ['Выставка историй мирной жизни самой западной точки России (Балтийской косы)'],
   },
   {
     title: 'История Светлогорска в семейном альбоме',
@@ -688,6 +702,10 @@ function normalizeLookup(value: string) {
   return transliterate(value).toLowerCase();
 }
 
+export function normalizeFestivalLookup(value: string) {
+  return normalizeLookup(value);
+}
+
 function tokenizeLookup(value: string) {
   return normalizeLookup(value)
     .split('-')
@@ -707,6 +725,22 @@ function parseDurationMinutes(value: string) {
   const hours = normalized.match(/(\d+)\s*час/);
   const minutes = normalized.match(/(\d+)\s*мин/);
   return (hours ? Number(hours[1]) * 60 : 0) + (minutes ? Number(minutes[1]) : 0) || null;
+}
+
+function parseRangeEnd(dateLabel: string) {
+  const match = dateLabel.match(/(?:с\s*)?(\d{1,2})\s+([а-я]+)(?:\s+\d{4})?\s*(?:-|—|–|по)\s*(\d{1,2})\s+([а-я]+)\s+(\d{4})/i);
+  if (!match) {
+    return null;
+  }
+
+  const year = match[5];
+  const monthInfo = MONTHS[match[4].toLowerCase()];
+  if (!monthInfo) {
+    return null;
+  }
+
+  const day = match[3].padStart(2, '0');
+  return `${year}-${monthInfo.number}-${day}T23:59:59`;
 }
 
 function parseExactDate(dateLabel: string, timeLabel: string) {
@@ -1141,6 +1175,63 @@ function normalizeEventLocation(venue: string, address: string) {
   return { venue, address };
 }
 
+function applyEventLocationOverride(title: string, location: { venue: string; address: string }) {
+  if (includesAnyNormalized(title, ['Этюды той весны'])) {
+    return {
+      venue: 'Секретная локация',
+      address: 'Секретная локация',
+    };
+  }
+
+  return location;
+}
+
+function createProvisionalZooExcursion(events: FestivalEvent[]) {
+  const zooLecture = events.find((event) =>
+    includesAnyNormalized(
+      event.title,
+      ['Право на существование: зоопарки в современном мире. Перспективы развития Калининградского зоопарка'],
+    ),
+  );
+
+  if (!zooLecture) {
+    return null;
+  }
+
+  return {
+    ...zooLecture,
+    slug: 'premera-novoy-tematicheskoy-ekskursii-po-kaliningradskomu-zooparku',
+    title: 'Премьера новой тематической экскурсии по Калининградскому зоопарку',
+    format: 'Экскурсия',
+    formatLabel: 'Экскурсия',
+    accessLabel: '',
+    dateLabel: 'Июнь 2026',
+    monthLabel: 'Скоро',
+    monthAnchor: 'soon',
+    timeLabel: 'Точное время будет объявлено',
+    durationLabel: 'Продолжительность уточняется',
+    venue: 'Калининградский зоопарк',
+    address: 'проспект Мира, 26',
+    speakerLabel: '',
+    affiliation: '',
+    heroRole: '',
+    summary: 'Премьера новой тематической экскурсии по зоопарку, которая лучше раскроет, что появилось в зоопарке в советское время, познакомит с историей зоопарка того периода и покажет вживую, как менялся зоопарк после немецкой эпохи.',
+    whyGo: 'Экскурсия задумывается как весёлая и полная необычных зоопарковых историй прогулка по советскому слою Калининградского зоопарка.',
+    questions: [],
+    registrationUrl: undefined,
+    calendarReady: false,
+    googleCalendarUrl: undefined,
+    icsUrl: undefined,
+    calendarNote: 'Точная дата и время экскурсии будут объявлены позже.',
+    kind: 'special' as const,
+    isoStart: undefined,
+    showingsLabel: 'Премьера экскурсии в июне',
+    speakerImages: [],
+    dialogueParticipants: [],
+    speakerLectureLinks: [],
+  } satisfies FestivalEvent;
+}
+
 function attachRelatedEvents(events: FestivalEvent[]) {
   for (const binding of RELATED_EVENT_BINDINGS) {
     const lecture = events.find((event) =>
@@ -1244,6 +1335,7 @@ function parseSections() {
       extractField(body, 'Связка в рабочем файле')
     ).trim();
     const speakerData = splitSpeakerData(speakerRaw);
+    const heroRole = normalizeText(extractField(body, 'Регалия для hero'));
     const dialogueParticipants = formatLabel.includes('Открытый диалог')
       ? extractDialogueParticipants(speakerRaw)
       : [];
@@ -1251,9 +1343,12 @@ function parseSections() {
     const timeLabel = sanitizeTimeLabel(
       extractField(body, 'Время') || extractField(body, 'Режим посещения') || extractField(body, 'Время посещения') || 'Время будет объявлено',
     );
-    const normalizedLocation = normalizeEventLocation(
-      applyExhibitionLocationOverride(title, kind, rawVenue),
-      address,
+    const normalizedLocation = applyEventLocationOverride(
+      title,
+      normalizeEventLocation(
+        applyExhibitionLocationOverride(title, kind, rawVenue),
+        address,
+      ),
     );
 
     const exactDate = parseExactDate(dateLabel, timeLabel);
@@ -1285,6 +1380,7 @@ function parseSections() {
       city: DEFAULT_CITY,
       speakerLabel: kind === 'special' ? '' : speakerData.speakerLabel,
       affiliation: kind === 'special' ? '' : speakerData.affiliation,
+      heroRole: kind === 'special' ? '' : heroRole,
       showingsLabel,
       summary,
       whyGo,
@@ -1301,6 +1397,11 @@ function parseSections() {
       isoStart: exactDate?.isoStart ?? rangeDate?.isoStart,
       speakerLectureLinks: [],
     });
+  }
+
+  const provisionalZooExcursion = createProvisionalZooExcursion(events);
+  if (provisionalZooExcursion) {
+    events.push(provisionalZooExcursion);
   }
 
   return sortEvents(attachRelatedEvents(events));
@@ -1413,6 +1514,55 @@ export function getHookQuotes(events: FestivalEvent[]) {
 
 export function getOpenDialogues(events: FestivalEvent[]) {
   return events.filter((event) => event.formatLabel.includes('Открытый диалог'));
+}
+
+export function getEventStartIso(event: FestivalEvent) {
+  if (event.kind === 'special') {
+    return undefined;
+  }
+
+  return event.isoStart;
+}
+
+export function getEventEndIso(event: FestivalEvent) {
+  if (event.kind === 'special') {
+    return undefined;
+  }
+
+  if (event.kind === 'range') {
+    return parseRangeEnd(event.dateLabel) ?? event.isoStart;
+  }
+
+  if (!event.isoStart) {
+    return undefined;
+  }
+
+  const durationMinutes = parseDurationMinutes(event.durationLabel) ?? 60;
+  const end = new Date(new Date(event.isoStart).getTime() + durationMinutes * 60_000);
+  return end.toISOString().slice(0, 19);
+}
+
+export function getEventTemporalState(event: FestivalEvent, now = new Date()) {
+  const startIso = getEventStartIso(event);
+  const endIso = getEventEndIso(event);
+
+  if (!startIso && !endIso) {
+    return 'timeless' as const;
+  }
+
+  const nowMs = now.getTime();
+  const startMs = startIso ? new Date(startIso).getTime() : Number.NaN;
+  const endMs = endIso ? new Date(endIso).getTime() : Number.NaN;
+
+  if (!Number.isNaN(startMs) && nowMs < startMs) {
+    return 'upcoming' as const;
+  }
+
+  if (!Number.isNaN(endMs) && nowMs > endMs) {
+    return 'past' as const;
+  }
+
+  return 'ongoing' as const;
 }
 
 export function buildIcs(event: FestivalEvent) {
